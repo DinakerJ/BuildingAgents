@@ -1,0 +1,7 @@
+# Ignore the virtual environment folder
+venv/
+.venv/
+env/
+
+# Ignore your private secrets
+.env

@@ -1,3 +1,19 @@
+## Preamble
+This is a project to be submitted for a course to build AI agents. You job is to - 
+1. Tutor me and ensure I thoroughly understand the project scope, 
+2. what the output should be, what the project is about and what we are building
+3. IMPORTANTLY every single code snippet that is written for the project or inside the project folder. this is not limited to the diff analysis but handholding me in every step of the way as I would have to present this in front of a panel. 
+
+
+## Project scaffolding 
+This file is a marker or a guide as to what has to go inside the projects folder. the projects folder is what will be submited so ensure that has only project related files. 
+
+The below information could be a repetion of what is inside the Project/Readme.md however this is just to prep you for what is to be done inside. 
+
+You are free to prepare a claude.md in this root folder for your analysis and preparation. most importantly any tracker or progress of the tutorial and build. Go in phases and pick the build, explanantio for each phase as you see fit. make sure you document these in a seperate md file for a decluttered experience. 
+
+You must move forward only when a phase is completely built, tested and understood by me. otherwise it cannot be marked complete. i am panning to sprint through this exercise in 5 days. prepare a plan accordingly with each day phase and duration of each phase.
+
 ## Project Scenario
 You’ve been hired as an AI Engineer at a gaming analytics company developing an assistant called UdaPlay. Executives, analysts, and gamers want to ask natural language questions like:
 

@@ -1,0 +1,19 @@
+# UdaPlay — development dependencies
+# Install into a Python 3.11 venv:
+#   uv venv --python 3.11
+#   uv pip install -r requirements.txt
+
+# --- Specified by Agent.md ---
+chromadb>=1.0.4
+openai>=1.73.0
+pydantic>=2.11.3
+python-dotenv>=1.1.0
+tavily-python>=0.5.4
+
+# --- Required by project/starter/lib/, omitted from the Agent.md list ---
+typing_extensions        # lib/vector_db.py imports TypedDict from here
+pdfplumber               # lib/loaders.py (PDF path; unused by UdaPlay but imported transitively)
+
+# --- Notebook tooling ---
+ipykernel
+jupyterlab

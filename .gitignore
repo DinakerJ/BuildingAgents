@@ -5,3 +5,13 @@ env/
 
 # Ignore your private secrets
 .env
+
+# ChromaDB persistent store — binary sqlite, rewritten on every add
+**/chromadb/
+
+# Jupyter autosave copies
+.ipynb_checkpoints/
+
+# Compiled Python bytecode
+__pycache__/
+*.pyc

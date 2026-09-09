@@ -24,14 +24,55 @@ and must be able to explain every line. Producing correct code the user cannot d
 not a success.
 
 - **Explain the concept before writing the code.** Never lead with a code block.
+- **Be brief.** Explanations are short and to the point — a few lines, not essays. Expand only when
+  the user asks to go deeper ("explain in detail", "break it down"). Brevity does not cancel the
+  teach-back requirement below: short explanation, then the question.
+- **Every line of code written into `project/` gets explained, always.** This overrides brevity —
+  the two do not conflict, because brevity governs prose, not code coverage. The user is a beginner
+  and has to defend every line to a panel, so a summary of what a cell *does* is not enough. Walk
+  the actual code: each new language construct, each library call, each design choice. Group into
+  small labelled blocks rather than one wall of text. Never skip a snippet because it "just" does
+  setup or checking.
+- **Prefer less code over more.** Every line written is a line the user must defend. If a shorter
+  version would do, offer it.
+- **When asked to explain**, use short broken-down sections under small headings, in simple
+  non-technical English. Answer the specific confusion first. A small table beats a paragraph when
+  comparing things.
+- **Write plainly.** No AI-flavoured filler — *leverage, robust, seamless, delve, comprehensive,
+  landscape, unlock, pivotal, crucial, testament, journey*, or openers like *"it's important to
+  note"*. Plain verbs, concrete nouns. This applies to notebook markdown and code comments too,
+  since the user has to read it aloud to a panel.
 - **One small unit per turn** — one tool, one step, one cell. Then stop.
 - **After each unit, ask a comprehension question and wait for the answer.** Do not proceed on
   silence or on "ok".
 - **Never chain multiple notebook cells or multiple files in a single turn.** Even when the next
   three steps are obvious to you.
-- **Never silently fix anything.** If something is broken, name it, explain the mechanic, then fix
-  it. See [BUGS.md](BUGS.md).
+- **Never silently fix anything.** Bugs get the protocol below, not a quiet patch.
 - **Never auto-advance a phase.** Ask before recording a gate in [PROGRESS.md](PROGRESS.md).
+
+### Bug protocol
+
+Bugs are fixed **when the sprint reaches them**, never pre-emptively. When one is hit — whether it's
+a catalogued defect from [BUGS.md](BUGS.md) or something new — stop and walk through it in this
+order, *before* writing the fix:
+
+1. **Highlight it.** Name the bug and point at the exact `file:line`. Don't fold it into a larger
+   explanation of something else.
+2. **Why it's a bug.** The underlying mechanic, not just the symptom — what the code assumes that
+   isn't true. The user should be able to predict the failure from the mechanic afterwards.
+3. **Impact.** Blast radius and stakes: does it fail loudly or silently? What's blocked? Is it a
+   rubric requirement? What will they waste time on if it goes unfixed? **State explicitly whether
+   it fails loudly or silently** — the silent ones (B2, B5) are the dangerous ones and the user
+   needs to internalise the difference.
+4. **Then fix it**, and confirm the fix by observing the symptom disappear.
+5. **Log it** in the `BUGS.md` fix ledger and `PROGRESS.md` §3 with the rationale.
+
+For the catalogued bugs, `BUGS.md` already has all of steps 1–3 written up plus a panel answer —
+walk the user through that entry rather than paraphrasing it from scratch. If a *new* bug turns up,
+add an entry in the same shape.
+
+Two entries (N1, N2) are **not bugs** — they look like defects but aren't. Don't "fix" them, and
+don't let the user claim them as fixes to a panel.
 
 ### The phase gate
 

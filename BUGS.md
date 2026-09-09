@@ -9,7 +9,13 @@ hits it, so you build it yourself and can explain it. Log each application in `P
 
 Every entry follows the same shape:
 
-> **Symptom** → **Root cause** → **Why it happens** (the underlying mechanic) → **The fix** → **Panel answer**
+> **Symptom** (what you see) → **Root cause** (`file:line`) → **Why it happens** (the underlying
+> mechanic) → **Impact** (what it costs you if unfixed) → **The fix** → **Panel answer**
+
+**When the sprint reaches a bug, it gets called out before it gets fixed** — name it, explain why
+it's wrong, state the blast radius, *then* patch. Never a silent fix. The `Impact` line is the one
+that matters most: two of these fail loudly and one fails silently, and the silent one is the
+dangerous one.
 
 Ordered by when the sprint will hit them.
 
@@ -41,6 +47,12 @@ that tells you *what* went wrong — is discarded.
 
 This is the classic "log and continue" antipattern: the handler converts a precise, actionable
 exception into a vague one thrown from a different line.
+
+**Impact.** Fails **loudly**, so you can't ship past it — but it costs you *debugging time*, not
+correctness. The damage is diagnostic: every future store error in P1, P2, and P7 arrives disguised
+as an `UnboundLocalError` about a variable that has nothing to do with the real problem. Left
+unfixed, you will lose 20 minutes to a wrong hypothesis at least once. It's first in the list
+because fixing it makes B2 and B3 legible.
 
 **The fix.** Re-raise with context instead of falling through:
 
@@ -76,6 +88,13 @@ Python process. `chromadb.PersistentClient(path=...)` is the one that writes a S
 index to disk. The rubric says *"The processed data is added to a **persistent** vector database"*,
 and notebook 01 hints at `PersistentClient(path="chromadb")`.
 
+**Impact.** Fails **silently, and it's a graded failure.** The notebook looks perfect — ingest runs,
+count is 15, queries work — right up until the kernel restarts. Two consequences: (1) the rubric's
+persistence requirement is unmet, which is a direct score loss; (2) every downstream phase pays to
+re-embed all 15 games on every kernel restart, which is real money and real waiting. It also
+pre-poisons P7: long-term memory built on an ephemeral client can never persist anything, so you'd
+be debugging B5 while B2 is the actual cause.
+
 **The fix.** Give the manager an optional path and branch:
 
 ```python
@@ -94,53 +113,43 @@ persistent store and disposable in-memory use."
 
 ---
 
-## B3 — Embeddings ignore `OPENAI_BASE_URL` and will hit the wrong host
+## B3 — ~~Embeddings ignore `OPENAI_BASE_URL`~~ — WITHDRAWN, does not apply
 
-**Hit in:** P1 · **Severity:** high (blocks all ingestion) · **Specific to your `.env`**
+**Status:** **Not a bug on chromadb 1.5.9.** Predicted from reading the code, then disproved by the
+P0 preflight on 2026-09-09. Kept here because the *reasoning* is still worth knowing and because
+withdrawing a wrong diagnosis on evidence is a better panel story than quietly deleting it.
 
-**Symptom.** Chat completions work fine, but the moment you `add()` documents you get a 401/404
-from the embeddings endpoint — apparently from a host you never configured.
+**What was predicted.** That [vector_db.py:161-165](project/starter/lib/vector_db.py#L161-L165)
+passing only `api_key` — no `api_base` — would send embeddings to `api.openai.com` while chat went
+through the `OPENAI_BASE_URL` gateway. And that the missing `CHROMA_OPENAI_API_KEY` from
+`project/starter/README.md` would compound it.
 
-**Root cause.** Two things compound.
+**What the preflight actually found.** Both wrong, for two separate reasons:
 
-1. [vector_db.py:161-165](project/starter/lib/vector_db.py#L161-L165) passes only `api_key`:
-   ```python
-   embedding_functions.OpenAIEmbeddingFunction(api_key=api_key)
-   ```
-   No `api_base`. Your `.env` sets a custom `OPENAI_BASE_URL` gateway.
-2. `project/starter/README.md` asks for `CHROMA_OPENAI_API_KEY`, which your `.env` does not define.
+| Prediction | Reality on chromadb 1.5.9 |
+| --- | --- |
+| Needs `CHROMA_OPENAI_API_KEY` | `api_key_env_var` **defaults to `OPENAI_API_KEY`**. The bare `OpenAIEmbeddingFunction()` constructor works with no arguments at all. |
+| Needs explicit `api_base` | `api_base` is `None` in the config and embeddings still return 1536 dims through `https://openai.vocareum.com/v1`. Chroma builds its client on the OpenAI SDK, which reads `OPENAI_BASE_URL` from the environment itself. |
 
-**Why it happens.** [llm.py:24](project/starter/lib/llm.py#L24) constructs a bare `OpenAI()`, and the
-official SDK reads `OPENAI_BASE_URL` from the environment automatically — so *chat* silently works
-through your gateway. Chroma's `OpenAIEmbeddingFunction` is a **separate client** that does not
-inherit that env var. You end up with one half of the stack pointed at your gateway and the other
-half pointed at `api.openai.com`.
+So both clients inherit the gateway from the same env var. There is no split.
 
-The lesson: "it works for chat" tells you nothing about embeddings when two different clients are
-involved.
+**Why the prediction was reasonable anyway.** Older chromadb releases *did* default to
+`CHROMA_OPENAI_API_KEY` — which is exactly why `project/starter/README.md` still asks for it. The
+starter README is stale, not wrong-at-the-time. The general principle also holds: two separate
+client objects can absolutely diverge on configuration, and "chat works" genuinely does not prove
+"embeddings work". That is why the preflight tests them as two independent checks.
 
-**The fix.** Thread the base URL through explicitly:
+**Impact.** None. No fix needed. Do not add `api_base` — it is already handled, and hardcoding it
+would break the moment the gateway changes.
 
-```python
-def _create_embedding_function(self, api_key: str) -> EmbeddingFunction:
-    return embedding_functions.OpenAIEmbeddingFunction(
-        api_key=api_key,
-        api_base=os.getenv("OPENAI_BASE_URL"),   # None => default OpenAI host
-        model_name="text-embedding-3-small",
-    )
-```
+**Action.** `CHROMA_OPENAI_API_KEY` can stay absent from `.env`. Ignore that line in the starter
+README.
 
-Also decide one convention for the key name and stick to it. Simplest: keep `OPENAI_API_KEY` as the
-single source and pass it in; if you prefer to match the starter README, add
-`CHROMA_OPENAI_API_KEY` to `.env` with the same value.
-
-> ⚠️ **Verify before trusting this entry.** This diagnosis is based on reading the code, not on a
-> failing run. If your gateway proxies embeddings transparently, B3 may not fire — confirm during
-> the P0 preflight and amend this file.
-
-**Panel answer.** "The chat client picked up my gateway from the environment automatically, but
-Chroma builds its own embedding client that doesn't. I passed `api_base` explicitly so both halves
-of the pipeline talk to the same endpoint."
+**Panel answer.** "I predicted a config split between the chat client and the embedding client,
+because they're separate objects and only one obviously read the gateway env var. I wrote the
+preflight to test them independently, and it disproved me — this chromadb version builds its
+embedding client on the OpenAI SDK, so both inherit `OPENAI_BASE_URL`. I withdrew the fix rather
+than apply a change I couldn't justify."
 
 ---
 
@@ -166,6 +175,11 @@ id or metadata filter; no query vector exists, so there is nothing to measure di
 
 Note the copy-paste lineage: `query()` above it has the identical `include` list, and it's right
 there. Someone duplicated the line into a method where one element became meaningless.
+
+**Impact.** Fails **loudly**, and the blast radius is narrower than it looks: `query()` is
+unaffected, so semantic search — the thing Part 1 is graded on — works fine without this fix. You
+only hit it if you call `.get()`. But B6 calls it, so this silently becomes a P7 blocker too: fix
+B4 and B6 still fails, which makes it easy to conclude the fix "didn't work". Fix them together.
 
 **The fix.** Drop `distances`:
 
@@ -201,6 +215,13 @@ that data outlives the process.
 
 This is the most dangerous bug in the file because **it fails silently**. B1 and B4 throw. This one
 just quietly returns nothing, and you'll blame your retrieval logic.
+
+**Impact.** Fails **silently, and it destroys data** — the worst combination in the file. Nothing
+raises, nothing warns, and the observable behaviour ("memory is empty") is indistinguishable from a
+retrieval bug, a threshold bug, or a write-back bug. So the cost isn't just the broken feature: it's
+that you will go looking in three wrong places first. Concretely, the P7 stand-out feature is
+100% dead, and because the wipe happens in `__init__`, *the act of inspecting the memory destroys
+the evidence* — you cannot debug it by constructing a `LongTermMemory` and looking inside.
 
 **The fix.** Use the non-destructive factory, and make wiping opt-in:
 
@@ -248,6 +269,12 @@ per query text) — which is why `search()` at
 [memory.py:326-327](project/starter/lib/memory.py#L326-L327) correctly does `[0]` on each and this
 method should not.
 
+**Impact.** Fails **loudly**, and it's contained — `get_namespaces()` is a convenience/inspection
+method, so `search()` and the write-back path work without it. Low stakes for the rubric. Its real
+cost is that it's the natural first thing you reach for when debugging B5 ("let me just list what's
+in memory"), and it throws — so the two bugs mask each other and you're now debugging your
+debugger. Note the second defect survives fixing the first, which is why "I fixed B4" isn't enough.
+
 **The fix.**
 
 ```python
@@ -294,6 +321,11 @@ out every time. The three `"session_id": state["session_id"]` lines in the step 
 code: they compute a value that is thrown away, and it happens to not matter because the spread
 already preserved it.
 
+**Impact.** Zero at runtime — nothing is broken. The cost is entirely in *your* time and
+credibility: it is the most convincing-looking false positive in the repo, and if you "fix" it and
+tell the panel you fixed a `KeyError`, a sharp examiner will ask you to reproduce it and you won't
+be able to. Report it as a design wart with dead code, not a defect.
+
 **What to do.** Adding `session_id: str` to the TypedDict is a reasonable tidy-up that makes the
 returns meaningful and the schema honest. Make the change knowing it fixes a *documentation*
 problem, not a crash.
@@ -320,6 +352,11 @@ current_total = state.get("total_tokens", 0)
 `TypedDict` is a **static** annotation with no runtime enforcement — Python will not populate a
 declared key, and will not complain when it's absent.
 
+**Impact.** Zero as shipped — but this is the one entry where *touching it* is the hazard. It's a
+booby trap for a tidy-minded developer: the "cleanup" is a one-character change, looks strictly more
+consistent than its neighbours, and breaks every single agent invocation immediately. A
+self-inflicted P6 outage during Day 4.
+
 **Why it matters to you.** If you "clean this up" to `state["total_tokens"]` for consistency with
 the neighbouring lines, the first LLM step raises `KeyError`. Either leave the `.get()` alone, or
 seed `"total_tokens": 0` in `initial_state` — do one, and know which.
@@ -338,7 +375,7 @@ Mark each as you apply it. Copy the date into `PROGRESS.md` §3 with your ration
 | --- | --- | --- | --- | --- |
 | B1 | `lib/vector_db.py` | P1 | [ ] | [ ] |
 | B2 | `lib/vector_db.py` | P1 | [ ] | [ ] |
-| B3 | `lib/vector_db.py` | P1 | [ ] | [ ] |
+| B3 | `lib/vector_db.py` | P1 | ~~n/a~~ withdrawn | [ ] |
 | B4 | `lib/vector_db.py` | P2 | [ ] | [ ] |
 | B5 | `lib/memory.py` | P7 | [ ] | [ ] |
 | B6 | `lib/memory.py` | P7 | [ ] | [ ] |

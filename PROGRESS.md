@@ -28,7 +28,7 @@ that assumes every phase lands first time will fail its own gates on Day 2.
 
 | Day | Phase | Hrs | Exit artifact | Status |
 | --- | --- | --- | --- | --- |
-| 1 | P0 Environment & recon | 1.5 | 3.11 venv, deps installed, preflight cell green | `[ ]` |
+| 1 | P0 Environment & recon | 1.5 | 3.11 venv, deps installed, preflight cell green | `[x]` |
 | 1 | P1 Persistent Chroma store + ingest | 2.0 | `udaplay` collection persisted on disk | `[ ]` |
 | 2 | P2 Semantic search → finish Part 1 | 1.5 | Notebook 01 restart-run-all clean | `[ ]` |
 | 2 | P3 `lib/` deep dive | 2.0 | You can explain how `@tool` becomes an OpenAI schema | `[ ]` |
@@ -39,6 +39,7 @@ that assumes every phase lands first time will fail its own gates on Day 2.
 | 5 | P8 Evaluation | 1.5 | AgentEvaluator: final-response, single-step, trajectory | `[ ]` |
 | 5 | P9 Stand-out features | 1.0 | Structured JSON + citations; extended dataset | `[ ]` |
 | 5 | P10 Polish & submit | 1.5 | `project/README.md` filled; both notebooks clean | `[ ]` |
+| 5 | P9b *(optional, after P10)* | +0.6 | Tools moved to `lib/udaplay_tools.py`, notebook still green | `[ ]` |
 
 Day totals: **D1** 3.5h · **D2** 3.5h · **D3** 4.0h · **D4** 3.5h · **D5** 4.0h
 
@@ -46,15 +47,16 @@ Day totals: **D1** 3.5h · **D2** 3.5h · **D3** 4.0h · **D4** 3.5h · **D5** 4
 
 ## §2 Phase blocks
 
-### P0 — Environment & recon · Day 1 · 1.5h · Status: `[ ]`
+### P0 — Environment & recon · Day 1 · 1.5h · Status: `[x]` GATED
 
 **Goal.** A working Python 3.11 environment where every project dependency imports and both API
 credentials are verified live.
 
 **Concepts**
 - Why 3.11 and not the 3.14 venv currently checked in (wheel availability for native deps).
-- What `.env` + `python-dotenv` actually do, and why `OPENAI_BASE_URL` is read implicitly by the
-  OpenAI SDK but not by ChromaDB's embedding client (see `BUGS.md` B3).
+- What `.env` + `python-dotenv` actually do, and how `OPENAI_BASE_URL` reaches *both* the chat client
+  and Chroma's embedding client without being passed anywhere (both sit on the OpenAI SDK, which
+  reads it from the environment). This is what disproved `BUGS.md` B3.
 - Why notebook cwd matters: relative `lib.` imports and the `"games"` path.
 
 **Build**
@@ -70,14 +72,29 @@ credentials are verified live.
 `project/starter/`.
 
 **Understand**
-1. Why does chat work through your gateway "for free" while embeddings might not?
+1. ~~Why does chat work through your gateway "for free" while embeddings might not?~~ *Premise was
+   wrong — both work. Revised to: why do both inherit the gateway, and why test them separately
+   anyway?* → Both clients sit on the OpenAI SDK, which reads `OPENAI_BASE_URL` itself. Tested
+   separately because "shared library underneath" was an assumption, and assumptions are what the
+   preflight exists to kill.
 2. What exactly breaks if you launch Jupyter from the repo root instead of `project/starter/`?
+   → `import lib` and `"games"` are relative, resolved against entry 1 of Python's search list,
+   which is the folder Jupyter started in. `ModuleNotFoundError: No module named 'lib'`. Installed
+   packages are unaffected — they sit at a fixed path inside `.venv`.
 3. What is in `requirements.txt` that `Agent.md` didn't list, and why is it needed?
+   → `typing_extensions` (`vector_db.py` imports `TypedDict` from it) and `pdfplumber` (pulled in
+   via `vector_db.py` → `loaders.py`, even though UdaPlay never reads a PDF).
 
-**Gate.** Built `[ ]` ____ · Tested `[ ]` ____ · Explained `[ ]` ____
+**Gate.** Built `[x]` 2026-09-09 · Tested `[x]` 2026-09-09 · Explained `[x]` 2026-09-09
 
 **Notes / blockers.**
-> _If the embedding call in the preflight succeeds unmodified, B3 does not apply — amend `BUGS.md`._
+- Python 3.11.15. `openai` resolved to 3.10.0 and `chromadb` to 1.5.9, both well above the
+  `Agent.md` pins. Checked the two APIs `lib/` depends on — `.beta.chat.completions.parse` and
+  `PersistentClient` — both still present.
+- Original `TAVILY_API_KEY` was invalid (15 chars, `Unauthorized`). Replaced; now passing.
+- **B3 withdrawn.** The preflight disproved it — see `BUGS.md` B3.
+- Preflight cell has no saved output yet; it was verified as a script. First real restart-run-all
+  of notebook 01 happens at the end of P2.
 
 ---
 
@@ -367,6 +384,45 @@ right answer from the corpus, not the web.
 
 **Gate.** Built `[ ]` ____ · Tested `[ ]` ____ · Explained `[ ]` ____
 
+---
+
+#### P9b — OPTIONAL: move the three tools into a `.py` module · +30–40 min · Status: `[ ]`
+
+**Rules of engagement.** Not required by the rubric. **Do P10 first** and only start this with both
+notebooks already passing restart-run-all. If it breaks, revert and lose nothing. Commit before
+starting so revert is one command.
+
+**Goal.** Move `retrieve_game`, `evaluate_retrieval`, and `game_web_search` out of notebook 02 into
+`lib/udaplay_tools.py`, leaving the notebook as: import, run three queries, show results.
+
+**Concepts**
+- Python's import search list: entry 1 is the folder you started Jupyter in for a notebook, but the
+  folder the *file lives in* when you run `python file.py`. Same list, different first entry.
+- A `.py` file can't reach notebook variables. Anything it needs — the collection, the client — must
+  be passed in as an argument or built inside the module.
+- `if __name__ == "__main__"`: code that runs when the file is executed directly but not when it's
+  imported. Lets the module self-test.
+- Why the notebook gets *shorter and more readable*, which is what a grader sees first.
+
+**Build**
+1. Create `lib/udaplay_tools.py`; move the three `@tool` functions across with their docstrings
+   intact — the docstrings are the model's tool descriptions, so a typo here is a behaviour change.
+2. Replace the notebook's hidden dependency on a global `collection` with an explicit parameter or a
+   module-level factory function.
+3. In notebook 02, swap the tool definitions for `from lib.udaplay_tools import ...`.
+4. Add an `if __name__ == "__main__"` block that calls each tool once, so
+   `python lib/udaplay_tools.py` smoke-tests the module on its own.
+
+**Test.** Restart kernel → run all on notebook 02. Same answers, same citations as before the move.
+Then run `python lib/udaplay_tools.py` from `project/starter/` and confirm it works standalone.
+
+**Understand**
+1. Why did `import lib` fail from the repo root but `import chromadb` succeed?
+2. What broke (or nearly broke) when the tools stopped sharing the notebook's variables?
+3. What does `if __name__ == "__main__"` actually guard against?
+
+**Gate.** Built `[ ]` ____ · Tested `[ ]` ____ · Explained `[ ]` ____
+
 **Notes / blockers.**
 
 ---
@@ -402,7 +458,13 @@ retroactively.
 
 | Date | Phase | Decision | Rationale |
 | --- | --- | --- | --- |
-| | | | |
+| 2026-09-09 | P0 | Rebuilt venv on Python 3.11.15, discarding the 3.14 one | `chromadb` ships compiled code and needs a matching prebuilt wheel; 3.14 had none, so pip would try to build from source and fail |
+| 2026-09-09 | P0 | Accepted `openai` 3.10.0 and `chromadb` 1.5.9 rather than pinning to the `Agent.md` minimums | Verified the only two APIs `lib/` relies on still exist: `.beta.chat.completions.parse` and `PersistentClient`. Pinning down to 1.x would have been busywork |
+| 2026-09-09 | P0 | Added `typing_extensions` and `pdfplumber` to `requirements.txt` | Both are imported by `lib/` but missing from the `Agent.md` list. `pdfplumber` arrives via `vector_db.py` → `loaders.py`, so it's needed even though no PDF is ever read |
+| 2026-09-09 | P0 | **Withdrew B3** instead of applying the documented fix | Preflight showed Chroma defaults `api_key_env_var` to `OPENAI_API_KEY` and inherits `OPENAI_BASE_URL` through the OpenAI SDK. Predicted bug, disproved by evidence. Adding `api_base` would have been an unjustifiable change |
+| 2026-09-09 | P0 | Replaced the Tavily API key | Original was 15 chars and returned `Unauthorized`; looked truncated |
+| 2026-09-09 | P0 | Wrote the preflight to report all checks independently rather than assert-and-stop | One run surfaced the broken Tavily key *and* confirmed the other four services, which is what proved P1/P2 weren't blocked |
+| 2026-09-09 | P9b | Added an optional notebook → `.py` refactor after P10 | Wanted the `.py` transition as a learning goal. Sequenced after submission polish so a late break costs nothing |
 
 ---
 

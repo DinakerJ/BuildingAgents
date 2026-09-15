@@ -30,7 +30,7 @@ that assumes every phase lands first time will fail its own gates on Day 2.
 | --- | --- | --- | --- | --- |
 | 1 | P0 Environment & recon | 1.5 | 3.11 venv, deps installed, preflight cell green | `[x]` |
 | 1 | P1 Persistent Chroma store + ingest | 2.0 | `udaplay` collection persisted on disk | `[x]` |
-| 2 | P2 Semantic search → finish Part 1 | 1.5 | Notebook 01 restart-run-all clean | `[ ]` |
+| 2 | P2 Semantic search → finish Part 1 | 1.5 | Notebook 01 restart-run-all clean | `[x]` |
 | 2 | P3 `lib/` deep dive | 2.0 | You can explain how `@tool` becomes an OpenAI schema | `[ ]` |
 | 3 | P4 The three tools | 2.5 | `retrieve_game`, `evaluate_retrieval`, `game_web_search` | `[ ]` |
 | 3 | P5 First working agent | 1.5 | 3 smoke queries answered, incl. Tavily fallback | `[ ]` |
@@ -157,7 +157,7 @@ skipping the ingest. `count()` must still say 15. Pair it with `collection.count
 
 ---
 
-### P2 — Semantic search → finish Part 1 · Day 2 · 1.5h · Status: `[ ]`
+### P2 — Semantic search → finish Part 1 · Day 2 · 1.5h · Status: `[x]` GATED
 
 **Goal.** Demonstrate semantic search over the collection and close out Part 1.
 
@@ -169,23 +169,53 @@ skipping the ingest. `count()` must still say 15. Pair it with `collection.count
 - Why `n_results` is a recall/precision dial, and what it costs you downstream in prompt tokens.
 
 **Build**
-1. Query the store with 3–4 natural-language questions; print documents alongside distances.
-2. Hit and fix **B4** if you call `.get()`.
-3. Try a metadata `where` filter and observe the effect.
-4. Clean up notebook 01: narrative markdown between cells, no dead code.
+1. Query the store with the three canonical questions; print documents alongside distances.
+2. ~~Hit and fix B4.~~ Not hit — the notebook calls ChromaDB's `get()` directly, which is correct.
+   B4 is in `lib/`'s wrapper and still waits in P7.
+3. Metadata `where` filters: exact match, numeric `$lt`, and filter combined with search.
+4. Markdown headings between sections; title changed from `[STARTER]`.
 
-**Test.** **Restart kernel → Run All** on `Udaplay_01_solution_project.ipynb`. Zero errors, all
-outputs present.
+**Test.** **Restart kernel → Run All**. Verified on disk: 12 code cells, execution counts 1–12 with
+no gaps, zero errors, all outputs present.
 
 **Understand**
 1. Why can a semantically perfect query still return a bad top result?
-2. What distance range did *your* store produce for a hit vs a miss — and what threshold would you
-   pick from that?
+   → The database has no concept of good or bad. It ranks by distance and returns the nearest,
+   whether or not anything actually answers the question.
+2. What distance range for a hit vs a miss, and what threshold would you pick?
+   → **No threshold works.** "violent fighting game with fatalities" → Smash Bros at **0.6168** is a
+   *useful* result; "Mortal Kombat X on PS5" → Spider-Man 2 at **0.5177** is *useless*. The useless
+   one scores better. Any cutoff either rejects the good answer or accepts the bad one. Distance
+   measures *how related*; the question is *does this answer it*. Different quantities.
 3. Why does `get()` have no distances?
+   → A distance needs two points. `query()` has your question as the second point; `get()` has no
+   question at all, so there is nothing to measure from. This is exactly what B4 gets wrong.
+4. Why were the filtered and unfiltered searches both 0.4939 for Gran Turismo?
+   → Distance is computed between the question and one document, and depends on nothing else. The
+   filter only decides which documents are eligible to be returned. Removing 13 games does not move
+   the remaining one. This is what makes scores comparable across different searches.
 
-**Gate.** Built `[ ]` ____ · Tested `[ ]` ____ · Explained `[ ]` ____
+**Gate.** Built `[x]` 2026-09-15 · Tested `[x]` 2026-09-15 · Explained `[x]` 2026-09-15
 
 **Notes / blockers.**
+- **Part 1 of the rubric is complete**: JSON loaded and formatted, persistent store with embeddings,
+  semantic search demonstrated.
+- Key measurements, all reproducible in the notebook output:
+
+  | Query | Top result | Distance | Actually useful? |
+  | --- | --- | --- | --- |
+  | Pokémon Gold and Silver release date | Pokémon Gold and Silver | 0.3424 | yes |
+  | first 3D platformer Mario game | Super Mario 64 | 0.4062 | yes |
+  | *(same, 2nd result)* | Super Mario World | 0.4338 | no — 0.028 away |
+  | Mortal Kombat X on PS5 | Marvel's Spider-Man 2 | 0.5177 | **no — game absent** |
+  | violent fighting game with fatalities | Super Smash Bros. Melee | 0.6168 | **yes** |
+
+- Found a data quirk worth keeping: publishers are stored as **7 distinct strings** including
+  `Sony Computer Entertainment` *and* `Sony Interactive Entertainment`, plus
+  `Microsoft Game Studios` *and* `Xbox Game Studios`. An exact filter on one name finds half the
+  Sony games. Decided **not** to normalise — the agent works in natural language and would never
+  produce either exact string, so the fix would serve a user who does not exist. Recorded as a
+  "how would you fix this" answer rather than a change.
 
 ---
 
@@ -495,6 +525,8 @@ retroactively.
 | 2026-09-14 | P1 | Passed `model_name="text-embedding-3-small"` explicitly | Chroma defaults to `text-embedding-ada-002`. Both return 1536 numbers, so taking the default would have silently given worse search quality with nothing to notice |
 | 2026-09-14 | P1 | Used `get_or_create_collection`, and `get_collection` for the persistence check | `get_or_create` makes the cell safe to re-run. `get_collection` raises when absent, which is what makes the persistence check meaningful rather than returning an empty collection |
 | 2026-09-14 | P1 | Moved B1 and B2 from P1 to P7 | The notebook uses ChromaDB directly and never constructs `VectorStoreManager`, so neither bug can surface until `LongTermMemory` needs that class |
+| 2026-09-15 | P2 | Rejected a distance threshold for retrieval quality, on measured evidence | A useful result scored 0.6168 while a useless one scored 0.5177. No cutoff separates them, so `evaluate_retrieval` has to read the text rather than compare a number |
+| 2026-09-15 | P2 | Left the duplicate Sony / Microsoft publisher names unnormalised | Adding a derived `PublisherGroup` field would work, but the agent takes natural-language questions and would never emit either exact string. Filtering on publisher is not on its path |
 
 ---
 

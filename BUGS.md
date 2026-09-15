@@ -128,7 +128,7 @@ through the `OPENAI_BASE_URL` gateway. And that the missing `CHROMA_OPENAI_API_K
 
 | Prediction | Reality on chromadb 1.5.9 |
 | --- | --- |
-| Needs `CHROMA_OPENAI_API_KEY` | `api_key_env_var` **defaults to `OPENAI_API_KEY`**. The bare `OpenAIEmbeddingFunction()` constructor works with no arguments at all. |
+| Needs `CHROMA_OPENAI_API_KEY` | The signature default for `api_key_env_var` really is `CHROMA_OPENAI_API_KEY` — but `__init__` overrides it: `if os.getenv("OPENAI_API_KEY") is not None: self.api_key_env_var = "OPENAI_API_KEY"`. Since we have that set, the bare constructor works with no arguments. |
 | Needs explicit `api_base` | `api_base` is `None` in the config and embeddings still return 1536 dims through `https://openai.vocareum.com/v1`. Chroma builds its client on the OpenAI SDK, which reads `OPENAI_BASE_URL` from the environment itself. |
 
 So both clients inherit the gateway from the same env var. There is no split.
@@ -373,8 +373,8 @@ Mark each as you apply it. Copy the date into `PROGRESS.md` §3 with your ration
 
 | ID | File | Phase | Applied | Explained |
 | --- | --- | --- | --- | --- |
-| B1 | `lib/vector_db.py` | P1 | [ ] | [ ] |
-| B2 | `lib/vector_db.py` | P1 | [ ] | [ ] |
+| B1 | `lib/vector_db.py` | ~~P1~~ **P7** | [ ] | [ ] |
+| B2 | `lib/vector_db.py` | ~~P1~~ **P7** | [ ] | [ ] |
 | B3 | `lib/vector_db.py` | P1 | ~~n/a~~ withdrawn | [ ] |
 | B4 | `lib/vector_db.py` | P2 | [ ] | [ ] |
 | B5 | `lib/memory.py` | P7 | [ ] | [ ] |

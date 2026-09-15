@@ -221,19 +221,22 @@ Code defects are catalogued in **[BUGS.md](BUGS.md)** (B1–B6 real, N1–N2 loo
 with symptom, cause, mechanic, fix, and a panel answer for each. Don't duplicate that analysis here;
 don't pre-apply the fixes.
 
-Environment and state gotchas:
+Environment and state gotchas (current as of P1 gated, 2026-09-14):
 
-- **Nothing is installed.** The `.venv` has only ipykernel. Rebuild at 3.11 before anything else.
 - **cwd must be `project/starter/`.** The single most common cause of "it worked yesterday".
-- **Every implementation cell in both starter notebooks is a commented-out `# TODO`** — except
-  **notebook 01 cell 13**, which is already-written working code (the games ingest loop, formatting
-  content as `[{Platform}] {Name} ({YearOfRelease}) - {Description}` with the filename stem as doc
-  id). It is the only non-stub implementation cell in either notebook. Don't rewrite it from
-  scratch; it fails today only because the `collection` it references is defined in a preceding
-  TODO cell.
-- **Nothing has ever been executed.** No cell has output. Assume zero working state.
-- **Two env-var conventions.** `.env` has `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `TAVILY_API_KEY`.
-  `project/starter/README.md` asks for `CHROMA_OPENAI_API_KEY`, which is absent. See B3.
+- **Environment is built.** Python 3.11.15 venv, all dependencies installed, kernel registered as
+  **UdaPlay (3.11)**. `openai` is 3.10.0 and `chromadb` is 1.5.9 — both far above the `Agent.md`
+  pins, both verified against the APIs `lib/` needs.
+- **Notebook 01 is done through the ingest.** Client, embedding function, collection, ingest and a
+  persistence check are all written and have real outputs. Notebook 02 is still entirely `# TODO`.
+- **The store exists on disk** at `project/starter/chromadb/`, collection `udaplay`, 15 documents,
+  embedded with `text-embedding-3-small`. Gitignored.
+- **The ingest deviates from the starter, deliberately.** The sentence template adds `Genre` and
+  `Publisher`, and it uses `upsert` rather than `add`. Both logged in `PROGRESS.md` §3 — don't
+  "restore" them.
+- **`CHROMA_OPENAI_API_KEY` is not needed.** chromadb 1.5.9 switches to `OPENAI_API_KEY` when that
+  is set, and the OpenAI SDK passes `OPENAI_BASE_URL` through to Chroma's embedding client. The
+  starter README's request for it is stale. See B3, which is **withdrawn**.
 
 ## Conventions
 

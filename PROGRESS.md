@@ -29,7 +29,7 @@ that assumes every phase lands first time will fail its own gates on Day 2.
 | Day | Phase | Hrs | Exit artifact | Status |
 | --- | --- | --- | --- | --- |
 | 1 | P0 Environment & recon | 1.5 | 3.11 venv, deps installed, preflight cell green | `[x]` |
-| 1 | P1 Persistent Chroma store + ingest | 2.0 | `udaplay` collection persisted on disk | `[ ]` |
+| 1 | P1 Persistent Chroma store + ingest | 2.0 | `udaplay` collection persisted on disk | `[x]` |
 | 2 | P2 Semantic search → finish Part 1 | 1.5 | Notebook 01 restart-run-all clean | `[ ]` |
 | 2 | P3 `lib/` deep dive | 2.0 | You can explain how `@tool` becomes an OpenAI schema | `[ ]` |
 | 3 | P4 The three tools | 2.5 | `retrieve_game`, `evaluate_retrieval`, `game_web_search` | `[ ]` |
@@ -98,7 +98,7 @@ credentials are verified live.
 
 ---
 
-### P1 — Persistent Chroma store + ingest 15 games · Day 1 · 2.0h · Status: `[ ]`
+### P1 — Persistent Chroma store + ingest 15 games · Day 1 · 2.0h · Status: `[x]` GATED
 
 **Goal.** Load, process, and embed the 15 game JSON files into a **persistent** ChromaDB collection.
 (Rubric: *"The processed data is added to a persistent vector database with appropriate
@@ -113,23 +113,47 @@ embeddings."*)
 
 **Build**
 1. Read the 15 files in `games/`; inspect the schema.
-2. Hit and fix **B1** (`create_store` UnboundLocalError), **B2** (persistent client), **B3**
-   (embedding `api_base`) — in that order, as each surfaces.
-3. Create the persistent collection (`path="chromadb"`).
-4. Wire up **notebook 01 cell 13** — the ingest loop is *already written*; it needs the `collection`
-   defined above it. Don't rewrite it.
+2. ~~Hit and fix B1, B2, B3 here.~~ **None of them surface in P1.** The notebook talks to ChromaDB
+   directly, so it never touches `VectorStoreManager` where B1 and B2 live — those moved to **P7**,
+   where `LongTermMemory` uses that class. B3 was withdrawn in P0.
+3. Create the persistent client (`PersistentClient(path="chromadb")`).
+4. Create the embedding function, passing `model_name` explicitly.
+5. Create the collection with `get_or_create_collection`.
+6. Build each game's sentence and load all 15 in one `upsert`.
+7. Add a persistence-check cell using `get_collection` (raises if absent).
 
-**Test.** Ingest, then restart the kernel, reconnect **without** re-ingesting, and confirm
-`collection.count() == 15`. That restart is the whole point — it's what proves persistence.
+**Test.** Ingest, restart the kernel, then run **only** the imports cell and the persistence cell —
+skipping the ingest. `count()` must still say 15. Pair it with `collection.count()` raising
+`NameError` to prove memory really was wiped. One without the other proves nothing.
 
 **Understand**
-1. Why does `create_store(force=True)` exist at all, and when would you want it?
+1. Why does `force=True` / delete-first exist at all, and when would you want it?
+   → When the embedding model changes (old vectors sit in a different number-space and must all go),
+   and to clear documents whose source files were deleted — `upsert` never removes anything.
 2. If you changed the content template, what would you have to redo, and why?
+   → Just edit and re-run, *because* we chose `upsert`. With the starter's `add()` the old sentences
+   would silently survive and nothing would say so.
 3. Where does the embedding actually get computed — your machine or the API?
+   → OpenAI's servers. Text goes out, 1536 numbers come back. Hence the cost, the API key, and the
+   need for a network. 1536 is fixed by `text-embedding-3-small`, not chosen by us.
+4. Why `row["metadatas"][0]["Name"]` and not `row[0]["metadatas"]["Name"]`?
+   → Chroma returns **columns, not rows** — a dict of parallel lists. Field name first, position
+   second. `row[0]` is a `KeyError` because `row` is a dict with no key `0`. This is B6's mistake.
 
-**Gate.** Built `[ ]` ____ · Tested `[ ]` ____ · Explained `[ ]` ____
+**Gate.** Built `[x]` 2026-09-14 · Tested `[x]` 2026-09-14 · Explained `[x]` 2026-09-14
 
 **Notes / blockers.**
+- Chose template **B** over the starter's: genre and publisher folded into the embedded sentence, so
+  "which games are shooters" and "what did Nintendo publish" become answerable. Metadata still keeps
+  the full JSON.
+- Swapped `add()` for `upsert()`. Proved first that `add()` silently ignores an existing id and keeps
+  the old text — a silent trap when the template changes.
+- Batched all 15 into a single `upsert` rather than 15 separate calls.
+- `text-embedding-3-small` passed explicitly. Chroma's default is the older `ada-002`, and both
+  return 1536 numbers, so accepting the default would have been invisible.
+- Observed distances on "first 3D Mario platformer": correct answer **0.4163**, wrong-but-related
+  **0.6208**. Only 0.2 apart — direct evidence for why `evaluate_retrieval` needs a judge rather than
+  a fixed distance threshold.
 
 ---
 
@@ -465,6 +489,12 @@ retroactively.
 | 2026-09-09 | P0 | Replaced the Tavily API key | Original was 15 chars and returned `Unauthorized`; looked truncated |
 | 2026-09-09 | P0 | Wrote the preflight to report all checks independently rather than assert-and-stop | One run surfaced the broken Tavily key *and* confirmed the other four services, which is what proved P1/P2 weren't blocked |
 | 2026-09-09 | P9b | Added an optional notebook → `.py` refactor after P10 | Wanted the `.py` transition as a learning goal. Sequenced after submission polish so a late break costs nothing |
+| 2026-09-14 | P1 | Extended the starter's content template to include `Genre` and `Publisher` | Metadata is never embedded, so anything absent from the sentence cannot be found by a meaning search. Checked the data first: 4 of 15 descriptions never mention the game's own name and 12 of 15 never mention the platform |
+| 2026-09-14 | P1 | Used `upsert()` where the starter used `add()` | Demonstrated that `add()` silently keeps the old text when an id already exists. Editing the template and re-running would have left stale sentences in the store with no warning |
+| 2026-09-14 | P1 | Batched all 15 documents into one `upsert` instead of one call per file | The embedding function accepts a list, so this is a single API round trip rather than fifteen |
+| 2026-09-14 | P1 | Passed `model_name="text-embedding-3-small"` explicitly | Chroma defaults to `text-embedding-ada-002`. Both return 1536 numbers, so taking the default would have silently given worse search quality with nothing to notice |
+| 2026-09-14 | P1 | Used `get_or_create_collection`, and `get_collection` for the persistence check | `get_or_create` makes the cell safe to re-run. `get_collection` raises when absent, which is what makes the persistence check meaningful rather than returning an empty collection |
+| 2026-09-14 | P1 | Moved B1 and B2 from P1 to P7 | The notebook uses ChromaDB directly and never constructs `VectorStoreManager`, so neither bug can surface until `LongTermMemory` needs that class |
 
 ---
 

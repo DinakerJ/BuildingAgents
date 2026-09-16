@@ -38,6 +38,22 @@ not a success.
 - **When asked to explain**, use short broken-down sections under small headings, in simple
   non-technical English. Answer the specific confusion first. A small table beats a paragraph when
   comparing things.
+- **When the user states their own reading of some code, validate it first** — point by point,
+  naming which claims are right, wrong, or muddled — *before* adding new explanation. A fresh
+  explanation that talks past what they said leaves them unable to tell what survived.
+- **Always name the file (and line) an explanation comes from**, before the explanation. If the
+  finding came from a grep or from reading library source, say so. If the thing being discussed
+  **does not exist yet**, say that explicitly rather than describing it as though it does.
+
+### Commit messages
+
+Describe the code change only, as ordinary engineering work. **No phase numbers, no
+"complete"/"gated"/progress framing, no mention of `PROGRESS.md` or `BUGS.md`, no tutoring
+narrative, no `Co-Authored-By` trailer.** A course evaluator may read the log; it should read as a
+project the user built.
+
+Good: `Add semantic search and metadata filtering to notebook 01`
+Bad: `P2 complete — PROGRESS.md: P2 gated, decision log updated`
 - **Write plainly.** No AI-flavoured filler — *leverage, robust, seamless, delve, comprehensive,
   landscape, unlock, pivotal, crucial, testament, journey*, or openers like *"it's important to
   note"*. Plain verbs, concrete nouns. This applies to notebook markdown and code comments too,
@@ -200,8 +216,13 @@ expects. Chroma returns **columnar** results (parallel arrays keyed by field), n
 - **`memory.py`** — `ShortTermMemory` (session → list of `Run`s, with a protected `"default"`
   session) vs `LongTermMemory` (vector-backed `MemoryFragment`s with namespace/owner/timestamp
   filtering).
-- **`loaders.py` / `parsers.py`** — the PDF ingestion path. **Unused by UdaPlay.** Don't spend time
-  there. (`pdfplumber` is still required, because `vector_db.py` imports `loaders`.)
+- **`parsers.py`** — output parsers, nothing to do with PDFs. `PydanticOutputParser.parse()` is
+  `model_class.model_validate_json(ai_message.content)` — the string→object step you need after any
+  `response_format` call, because `llm.py` keeps only `message.content` and discards OpenAI's
+  ready-made `message.parsed`. Already used by `evaluation.py:102`. Also has `StrOutputParser`,
+  `JsonOutputParser`, and `ToolOutputParser`.
+- **`loaders.py`** — the PDF path. **Unused by UdaPlay.** Don't spend time there. (`pdfplumber` is
+  still required, because `vector_db.py` imports `loaders`.)
 
 ### One query, end to end
 

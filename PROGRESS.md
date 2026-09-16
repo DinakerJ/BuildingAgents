@@ -31,7 +31,7 @@ that assumes every phase lands first time will fail its own gates on Day 2.
 | 1 | P0 Environment & recon | 1.5 | 3.11 venv, deps installed, preflight cell green | `[x]` |
 | 1 | P1 Persistent Chroma store + ingest | 2.0 | `udaplay` collection persisted on disk | `[x]` |
 | 2 | P2 Semantic search → finish Part 1 | 1.5 | Notebook 01 restart-run-all clean | `[x]` |
-| 2 | P3 `lib/` deep dive | 2.0 | You can explain how `@tool` becomes an OpenAI schema | `[ ]` |
+| 2 | P3 `lib/` deep dive | 2.0 | You can explain how `@tool` becomes an OpenAI schema | `[x]` |
 | 3 | P4 The three tools | 2.5 | `retrieve_game`, `evaluate_retrieval`, `game_web_search` | `[ ]` |
 | 3 | P5 First working agent | 1.5 | 3 smoke queries answered, incl. Tavily fallback | `[ ]` |
 | 4 | P6 Stateful agent + state machine | 2.0 | Multi-turn session demonstrably remembers context | `[ ]` |
@@ -219,7 +219,7 @@ no gaps, zero errors, all outputs present.
 
 ---
 
-### P3 — `lib/` deep dive: messages, llm, tooling, state_machine · Day 2 · 2.0h · Status: `[ ]`
+### P3 — `lib/` deep dive: messages, llm, tooling, state_machine · Day 2 · 2.0h · Status: `[x]` GATED
 
 **Goal.** Understand the provided framework before building on it. **No deliverable code** — this
 phase exists purely so P4–P6 aren't cargo-culting.
@@ -233,23 +233,47 @@ phase exists purely so P4–P6 aren't cargo-culting.
   possible at all.
 - Structured output via `client.beta.chat.completions.parse` and a Pydantic `response_format`.
 
-**Build**
-1. Write a throwaway `@tool` function; print `Tool.dict()` and read the generated schema.
-2. Change only its docstring; re-print. Observe what the model would now see.
-3. Build a 3-step toy `StateMachine`; inspect `run.snapshots`.
-4. Deliberately return an undeclared key from a step. Watch it vanish. That's the filter.
+**Build** (all in scratchpad — nothing written into `project/`)
+1. `@tool` on a throwaway function; printed `Tool.dict()` and mapped each JSON field back to its
+   Python source.
+2. A 3-step toy `StateMachine` (`ShopState` with `basket` / `total`); printed every snapshot.
+3. Returned an undeclared key `discount` from a step and watched it disappear.
+4. Structured output: the same judging prompt with and without `response_format`, using the real
+   Mortal Kombat X / Spider-Man case from P2.
 
-**Test.** You can predict `Tool.dict()`'s output for a new function *before* running it, and you can
-predict which keys survive a step return.
+**Test.** Can predict which keys survive a step return, and which parts of a function end up in the
+tool schema.
 
 **Understand**
-1. Trace a query through the agent's state machine, naming every step and both branch outcomes.
-2. Why does an `Optional[str]` parameter become non-required in the schema?
-3. `AgentState` has no `session_id` yet `state["session_id"]` works. Explain precisely why.
+1. What does the model receive when you give it a tool?
+   → Four fields from `Tool.dict()`: `name` (function name), `description` (**the docstring**),
+   `properties` (parameter names + type hints), `required` (params with no default). **Not** `func`
+   — the function itself is stored on the object but never sent.
+2. A step returns a key not in the schema; a schema key is not returned. What happens to each?
+   → Returned but not in schema → **silently dropped**. In schema but not returned → **kept
+   unchanged** (not emptied). The schema governs what a step may *change*, not what the state may
+   *contain*.
+3. Why must the judge use `response_format` instead of returning a sentence?
+   → The agent has to branch on a real boolean. Prose would mean string-matching for "No", which
+   breaks on rephrasing and makes the fallback fire at random.
+4. What type is `r.content` after a `response_format` call?
+   → A **string** of JSON. `lib/llm.py:76-80` keeps only `message.content` and discards OpenAI's
+   ready-made `message.parsed`. Need `Model.model_validate_json(r.content)`, or
+   `PydanticOutputParser` from `lib/parsers.py:34-38`. Skipping it does not crash —
+   `bool('{"useful":false}')` is `True`, so the fallback would silently never fire.
 
-**Gate.** Built `[ ]` ____ · Tested `[ ]` ____ · Explained `[ ]` ____
+**Gate.** Built `[x]` 2026-09-16 · Tested `[x]` 2026-09-16 · Explained `[x]` 2026-09-16
 
 **Notes / blockers.**
+- **N1 deferred to P6.** The underlying mechanic (schema filter + `{**state}` carry-forward) is
+  understood and demonstrated. Applying it to `AgentState`/`session_id` needs a running agent to be
+  meaningful, which does not exist until P6.
+- Corrected a wrong claim in `CLAUDE.md`: `lib/parsers.py` is **not** part of the PDF path. It holds
+  output parsers, and `PydanticOutputParser` is the string→object step needed after every
+  `response_format` call. Already used at `lib/evaluation.py:102`.
+- `evaluate_retrieval` **does not exist yet** — it is a `# TODO` at notebook 02 line 158, written in
+  P4. The working `response_format` example to pattern-match is
+  `lib/evaluation.py:96-104`.
 
 ---
 

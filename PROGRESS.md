@@ -33,7 +33,7 @@ that assumes every phase lands first time will fail its own gates on Day 2.
 | 2 | P2 Semantic search → finish Part 1 | 1.5 | Notebook 01 restart-run-all clean | `[x]` |
 | 2 | P3 `lib/` deep dive | 2.0 | You can explain how `@tool` becomes an OpenAI schema | `[x]` |
 | 3 | P4 The three tools | 2.5 | `retrieve_game`, `evaluate_retrieval`, `game_web_search` | `[x]` |
-| 3 | P5 First working agent | 1.5 | 3 smoke queries answered, incl. Tavily fallback | `[ ]` |
+| 3 | P5 First working agent | 1.5 | 3 smoke queries answered, incl. Tavily fallback | `[x]` |
 | 4 | P6 Stateful agent + state machine | 2.0 | Multi-turn session demonstrably remembers context | `[ ]` |
 | 4 | P7 Long-term memory persistence | 1.5 | Web-search findings survive a kernel restart | `[ ]` |
 | 5 | P8 Evaluation | 1.5 | AgentEvaluator: final-response, single-step, trajectory | `[ ]` |
@@ -323,7 +323,7 @@ specifically, since the whole fallback depends on it.
 
 ---
 
-### P5 — First working agent · Day 3 · 1.5h · Status: `[ ]`
+### P5 — First working agent · Day 3 · 1.5h · Status: `[x]`
 
 **Goal.** An `Agent` that answers using internal knowledge first, evaluates the result, and falls
 back to web search when needed.
@@ -348,9 +348,46 @@ Inspect `run.snapshots` to confirm the path rather than trusting the final text.
 2. What would make the agent skip `evaluate_retrieval` entirely, and how would you fix that?
 3. How many LLM calls did the fallback query cost, and why that many?
 
-**Gate.** Built `[ ]` ____ · Tested `[ ]` ____ · Explained `[ ]` ____
+**Gate.** Built `[x]` 2026-09-17 · Tested `[x]` 2026-09-17 · Explained `[x]` 2026-09-17
+
+**Results.** Each query in its own session, so none could answer from another's history.
+
+| Query | Tools fired | Snapshots | Tokens (agent only) |
+| --- | --- | --- | --- |
+| Pokémon Gold and Silver | retrieve → evaluate | 7 | 2,235 |
+| First 3D Mario platformer | retrieve → evaluate | 7 | 2,456 |
+| Mortal Kombat X on PS5 | retrieve → evaluate → **web** | 9 | 6,735 |
+
+- The fallback is proven from the tool trace, not from the answer text. `tools_used()` reads
+  `run.get_final_state()["messages"]`, which the machine wrote at `state_machine.py:239` — the
+  answer text is the model's claim, the snapshots are the machine's record.
+- Q3's answer held the backwards-compatibility distinction ("not released for PS5, playable
+  through backwards compatibility") against web results including a video titled "MK X - PS5
+  Gameplay". That line in the instructions earned its place.
+- Q2 is RAG + reasoning: the corpus never contains the word "first". The agent derived it from
+  "groundbreaking 3D platformer" plus 1996 being earliest, and the judge accepted the documents.
+- Snapshot count excludes termination — `state_machine.py:226-228` breaks before saving.
+- **Q3 cost five model calls, not four.** Four `llm_processor` turns plus the judge's own call
+  inside `evaluate_retrieval`. `total_tokens` only sums the agent's calls
+  (`agents.py:70-72`), so the reported figure undercounts — a tool that calls a model spends
+  tokens the agent never sees.
+
+**Demonstrated, not assumed: instructions are persuasion, not enforcement.** Ran the same agent,
+same tools, same model, `temperature=0.0`, changing only the instructions:
+
+| Instructions | Pokémon | Mortal Kombat X |
+| --- | --- | --- |
+| Strict (numbered procedure) | retrieve → evaluate | retrieve → evaluate → web |
+| Vague ("use them as needed") | retrieve → **web** | retrieve → **web** |
+
+The vague run skipped the judge on both queries and went to the web for a question the local
+corpus answers. No error either time. `check_tool_calls` at `agents.py:133-137` only asks whether
+the model requested *any* tool — it cannot see which tools exist or verify an order. Guaranteeing
+the sequence means wiring it as named steps, which is the optional task in cell `eb83fbb1`.
 
 **Notes / blockers.**
+- Notebook execution counters are out of order (1–11, then 14). Needs a restart-run-all before
+  submission; tracked in §4.
 
 ---
 
@@ -566,6 +603,9 @@ retroactively.
 | 2026-09-17 | P4 | `evaluate_retrieval` returns a plain `dict`, not the `EvaluationReport` object | The tool result is serialised into a `ToolMessage`. A dict serialises as-is; a Pydantic object would need an extra `.model_dump()` on the way out |
 | 2026-09-17 | P4 | `retrieve_game` returns documents only, no distances | Distances were shown in P2 to be uncorrelated with usefulness, and the judge reads text. Passing a number the judge cannot act on would only invite a threshold |
 | 2026-09-17 | P4 | Tested each tool through `.func(...)` rather than the `Tool` wrapper | `@tool` returns a `Tool` object whose call path expects JSON arguments from the model. `.func` is the original function, which is what an isolation test should exercise |
+| 2026-09-17 | P5 | Tightened `retrieved_docs: list` to `list[str]` (B7) | `tooling.py:61` tests `get_origin(typ) is list`, which is `None` for a bare `list`, so the schema silently defaulted to `"string"`. The model was being asked to flatten three documents into one blob of text itself. Found by printing `evaluate_retrieval.dict()`; verified by diffing the schema before and after |
+| 2026-09-17 | P5 | Set `temperature=0.0`, overriding the `Agent` default of `0.7` | Tool selection is a choice the model makes, so randomness there makes the tool-use policy untestable. `agents.py:23` |
+| 2026-09-17 | P5 | Put the RAG → evaluate → fallback ordering in the system instructions, not in code | Nothing in `agents.py` knows one tool from another; `_tool_step` matches by name and the only branch asks whether any tool was requested. Prose is the only place the policy can live, and it is restated as a prohibition because the docstrings say the same thing from the tool side |
 
 ---
 

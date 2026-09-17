@@ -238,11 +238,11 @@ expects. Chroma returns **columnar** results (parallel arrays keyed by field), n
 
 ## Landmines
 
-Code defects are catalogued in **[BUGS.md](BUGS.md)** (B1–B6 real, N1–N2 look-like-bugs-but-aren't)
+Code defects are catalogued in **[BUGS.md](BUGS.md)** (B1–B7 real, N1–N2 look-like-bugs-but-aren't)
 with symptom, cause, mechanic, fix, and a panel answer for each. Don't duplicate that analysis here;
 don't pre-apply the fixes.
 
-Environment and state gotchas (current as of P4 gated, 2026-09-17):
+Environment and state gotchas (current as of P5 gated, 2026-09-17):
 
 - **cwd must be `project/starter/`.** The single most common cause of "it worked yesterday".
 - **Environment is built.** Python 3.11.15 venv, all dependencies installed, kernel registered as
@@ -250,10 +250,16 @@ Environment and state gotchas (current as of P4 gated, 2026-09-17):
   pins, both verified against the APIs `lib/` needs.
 - **Notebook 01 is complete** — client, embedding function, collection, ingest, persistence check,
   semantic search and metadata filtering, all with real outputs.
-- **Notebook 02 is written through the three tools.** Setup, environment, collection reconnect,
-  `retrieve_game`, `evaluate_retrieval` (+ the `EvaluationReport` model, defined in the notebook
-  because it is absent from `lib/`), `game_web_search`, and a smoke-test cell per tool. The Agent
-  cells below them are still `# TODO`.
+- **Notebook 02 is written through the working agent.** Setup, environment, collection reconnect,
+  the three tools (+ the `EvaluationReport` model, defined in the notebook because it is absent
+  from `lib/`), a smoke test per tool, the `Agent` with its instructions, and the three canonical
+  queries with tool traces. Only the optional long-term-memory / wired-steps cell is still `# TODO`.
+- **The tool-use order lives in the system instructions, nowhere else.** `check_tool_calls`
+  ([agents.py:133-137](project/starter/lib/agents.py#L133-L137)) only asks whether the model
+  requested any tool. Weakening the instructions was tested and the agent skipped
+  `evaluate_retrieval` entirely, with no error. Don't reword those instructions casually.
+- **Notebook execution counters are out of order** (1–11, then 14). Needs a restart-run-all before
+  submission.
 - **`game_web_search`'s docstring was fixed, deliberately.** The starter's was a copy of
   `retrieve_game`'s and claimed to search the vector DB. Don't "restore" it.
 - **The store exists on disk** at `project/starter/chromadb/`, collection `udaplay`, 15 documents,

@@ -367,6 +367,52 @@ defensive noise."
 
 ---
 
+## B7 — A bare `list` annotation silently becomes `"string"` in the tool schema
+
+**Found in:** P5 (2026-09-17) · **Severity:** low, but silent · **Fixed in our code, not in `lib/`**
+
+**Symptom.** None visible. The tool runs, the agent answers, nothing raises. The only way it
+surfaced was printing `evaluate_retrieval.dict()` and reading the schema by eye:
+
+```json
+"retrieved_docs": { "type": "string" }      // annotation said list
+```
+
+**Cause.** The type conversion at [tooling.py:61](project/starter/lib/tooling.py#L61) tests
+`get_origin(typ) is list`. `get_origin` reports the container behind a *parameterised* generic:
+
+| Annotation | `get_origin(...)` | Matches line 61? | Schema produced |
+| --- | --- | --- | --- |
+| `list[str]` | `list` | yes | `{"type": "array", "items": {"type": "string"}}` |
+| `list` | `None` | no | `{"type": "string"}` |
+
+A bare `list` has nothing to unwrap, so `get_origin` returns `None`. It then misses the `dict`
+branch, misses the primitive `mapping` at [lines 74-81](project/starter/lib/tooling.py#L74-L81)
+(which has no `list` key), and hits the catch-all at
+[line 83](project/starter/lib/tooling.py#L83): `return {"type": mapping.get(typ, "string")}`.
+
+**Impact.** Fails silently in both directions. The model is told to send text, so it flattens the
+three retrieved documents into one string itself — and that flattening is the model's work, not
+ours. It may copy them faithfully, or shorten, reword, or drop one. The judge would then be
+assessing the model's paraphrase rather than the retrieved documents, and the verdict looks equally
+plausible either way. Nothing crashes, so nothing prompts you to look.
+
+**The fix.** Ours, not `lib/`'s — `tooling.py` handles `list[str]` correctly and our annotation was
+too loose. Changed `retrieved_docs: list` to `retrieved_docs: list[str]` in notebook 02. Verified
+by diffing the generated schema before and after.
+
+**Also learned here.** `Tool.dict()` at [tooling.py:85-103](project/starter/lib/tooling.py#L85-L103)
+reads only `self.parameters`. **Return annotations never reach the model** — the `-> dict` and
+`-> list` on our tools are notes to ourselves.
+
+**Panel answer.** "The `@tool` decorator turns annotations into the JSON schema the model fills in.
+It detects `list[str]` but not a bare `list`, and unknown types silently default to string — so my
+loose annotation was telling the model to send one blob of text instead of a list. It still worked,
+which is why I only caught it by printing the schema. Fixed by tightening the annotation; I verified
+it by comparing the generated schema before and after."
+
+---
+
 ## Fix ledger
 
 Mark each as you apply it. Copy the date into `PROGRESS.md` §3 with your rationale.
@@ -381,3 +427,4 @@ Mark each as you apply it. Copy the date into `PROGRESS.md` §3 with your ration
 | B6 | `lib/memory.py` | P7 | [ ] | [ ] |
 | N1 | `lib/agents.py` | P3/P6 | n/a | [ ] |
 | N2 | `lib/agents.py` | P6 | n/a | [ ] |
+| B7 | notebook 02 (trap in `lib/tooling.py`) | P5 | [x] 2026-09-17 | [ ] |

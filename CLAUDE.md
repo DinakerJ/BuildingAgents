@@ -242,14 +242,20 @@ Code defects are catalogued in **[BUGS.md](BUGS.md)** (B1–B6 real, N1–N2 loo
 with symptom, cause, mechanic, fix, and a panel answer for each. Don't duplicate that analysis here;
 don't pre-apply the fixes.
 
-Environment and state gotchas (current as of P1 gated, 2026-09-14):
+Environment and state gotchas (current as of P4 gated, 2026-09-17):
 
 - **cwd must be `project/starter/`.** The single most common cause of "it worked yesterday".
 - **Environment is built.** Python 3.11.15 venv, all dependencies installed, kernel registered as
   **UdaPlay (3.11)**. `openai` is 3.10.0 and `chromadb` is 1.5.9 — both far above the `Agent.md`
   pins, both verified against the APIs `lib/` needs.
-- **Notebook 01 is done through the ingest.** Client, embedding function, collection, ingest and a
-  persistence check are all written and have real outputs. Notebook 02 is still entirely `# TODO`.
+- **Notebook 01 is complete** — client, embedding function, collection, ingest, persistence check,
+  semantic search and metadata filtering, all with real outputs.
+- **Notebook 02 is written through the three tools.** Setup, environment, collection reconnect,
+  `retrieve_game`, `evaluate_retrieval` (+ the `EvaluationReport` model, defined in the notebook
+  because it is absent from `lib/`), `game_web_search`, and a smoke-test cell per tool. The Agent
+  cells below them are still `# TODO`.
+- **`game_web_search`'s docstring was fixed, deliberately.** The starter's was a copy of
+  `retrieve_game`'s and claimed to search the vector DB. Don't "restore" it.
 - **The store exists on disk** at `project/starter/chromadb/`, collection `udaplay`, 15 documents,
   embedded with `text-embedding-3-small`. Gitignored.
 - **The ingest deviates from the starter, deliberately.** The sentence template adds `Genre` and

@@ -32,7 +32,7 @@ that assumes every phase lands first time will fail its own gates on Day 2.
 | 1 | P1 Persistent Chroma store + ingest | 2.0 | `udaplay` collection persisted on disk | `[x]` |
 | 2 | P2 Semantic search → finish Part 1 | 1.5 | Notebook 01 restart-run-all clean | `[x]` |
 | 2 | P3 `lib/` deep dive | 2.0 | You can explain how `@tool` becomes an OpenAI schema | `[x]` |
-| 3 | P4 The three tools | 2.5 | `retrieve_game`, `evaluate_retrieval`, `game_web_search` | `[ ]` |
+| 3 | P4 The three tools | 2.5 | `retrieve_game`, `evaluate_retrieval`, `game_web_search` | `[x]` |
 | 3 | P5 First working agent | 1.5 | 3 smoke queries answered, incl. Tavily fallback | `[ ]` |
 | 4 | P6 Stateful agent + state machine | 2.0 | Multi-turn session demonstrably remembers context | `[ ]` |
 | 4 | P7 Long-term memory persistence | 1.5 | Web-search findings survive a kernel restart | `[ ]` |
@@ -277,7 +277,7 @@ tool schema.
 
 ---
 
-### P4 — The three tools · Day 3 · 2.5h · Status: `[ ]`
+### P4 — The three tools · Day 3 · 2.5h · Status: `[x]`
 
 **Goal.** Implement `retrieve_game`, `evaluate_retrieval`, and `game_web_search` as `@tool`
 functions integrated into the agent workflow. (Rubric: three tools, each a function/class.)
@@ -307,9 +307,19 @@ specifically, since the whole fallback depends on it.
 2. Why must `evaluate_retrieval` use structured output rather than returning a sentence?
 3. What happens if retrieval is *good* but the judge says no — and how would you notice?
 
-**Gate.** Built `[ ]` ____ · Tested `[ ]` ____ · Explained `[ ]` ____
+**Gate.** Built `[x]` 2026-09-17 · Tested `[x]` 2026-09-17 · Explained `[x]` 2026-09-17
 
 **Notes / blockers.**
+- Starter docstring for `game_web_search` was a copy-paste of `retrieve_game`'s ("Finds most
+  results in the vector DB"). Rewritten to describe web search and to name itself the fallback.
+  The docstring is the tool description the model sees, so this was a behaviour fix.
+- `EvaluationReport` did not exist in `lib/` — defined in the notebook, patterned on
+  `JudgeEvaluation` at `lib/evaluation.py:57`.
+- Smoke tests call `.func(...)` to bypass the `Tool` wrapper and invoke the plain function.
+- Verified: `useful=True` for the Pokémon retrieval, `useful=False` for Mortal Kombat X.
+- Web results for MK X include a "PS5 Gameplay" video title and a PS Store backwards-compatibility
+  notice. Correct answer is PS4/Xbox One/PC, 2015 — playable on PS5, not released for it. The
+  wording risk moves to the agent's system prompt in P5.
 
 ---
 
@@ -551,6 +561,11 @@ retroactively.
 | 2026-09-14 | P1 | Moved B1 and B2 from P1 to P7 | The notebook uses ChromaDB directly and never constructs `VectorStoreManager`, so neither bug can surface until `LongTermMemory` needs that class |
 | 2026-09-15 | P2 | Rejected a distance threshold for retrieval quality, on measured evidence | A useful result scored 0.6168 while a useless one scored 0.5177. No cutoff separates them, so `evaluate_retrieval` has to read the text rather than compare a number |
 | 2026-09-15 | P2 | Left the duplicate Sony / Microsoft publisher names unnormalised | Adding a derived `PublisherGroup` field would work, but the agent takes natural-language questions and would never emit either exact string. Filtering on publisher is not on its path |
+| 2026-09-17 | P4 | Rewrote the `game_web_search` docstring; the starter's was a copy of `retrieve_game`'s | `tooling.py:24` makes the docstring the tool description the model sees. Two tools both claiming to search the vector DB gives the model no basis to pick the fallback. A wording change here is a behaviour change |
+| 2026-09-17 | P4 | Defined `EvaluationReport` in the notebook rather than in `lib/` | The starter TODO names the model but it exists nowhere in `lib/`. Kept it beside the tool that uses it; patterned on `JudgeEvaluation` at `lib/evaluation.py:57` |
+| 2026-09-17 | P4 | `evaluate_retrieval` returns a plain `dict`, not the `EvaluationReport` object | The tool result is serialised into a `ToolMessage`. A dict serialises as-is; a Pydantic object would need an extra `.model_dump()` on the way out |
+| 2026-09-17 | P4 | `retrieve_game` returns documents only, no distances | Distances were shown in P2 to be uncorrelated with usefulness, and the judge reads text. Passing a number the judge cannot act on would only invite a threshold |
+| 2026-09-17 | P4 | Tested each tool through `.func(...)` rather than the `Tool` wrapper | `@tool` returns a `Tool` object whose call path expects JSON arguments from the model. `.func` is the original function, which is what an isolation test should exercise |
 
 ---
 

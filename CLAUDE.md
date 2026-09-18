@@ -242,7 +242,7 @@ Code defects are catalogued in **[BUGS.md](BUGS.md)** (B1–B7 real, N1–N2 loo
 with symptom, cause, mechanic, fix, and a panel answer for each. Don't duplicate that analysis here;
 don't pre-apply the fixes.
 
-Environment and state gotchas (current as of P5 gated, 2026-09-17):
+Environment and state gotchas (current as of P6 gated, 2026-09-18):
 
 - **cwd must be `project/starter/`.** The single most common cause of "it worked yesterday".
 - **Environment is built.** Python 3.11.15 venv, all dependencies installed, kernel registered as
@@ -250,16 +250,25 @@ Environment and state gotchas (current as of P5 gated, 2026-09-17):
   pins, both verified against the APIs `lib/` needs.
 - **Notebook 01 is complete** — client, embedding function, collection, ingest, persistence check,
   semantic search and metadata filtering, all with real outputs.
-- **Notebook 02 is written through the working agent.** Setup, environment, collection reconnect,
-  the three tools (+ the `EvaluationReport` model, defined in the notebook because it is absent
-  from `lib/`), a smoke test per tool, the `Agent` with its instructions, and the three canonical
-  queries with tool traces. Only the optional long-term-memory / wired-steps cell is still `# TODO`.
+- **Notebook 02 is written through multi-turn sessions.** Setup, environment, collection
+  reconnect, the three tools (+ the `EvaluationReport` model, defined in the notebook because it
+  is absent from `lib/`), a smoke test per tool, the `Agent` with its instructions, the three
+  canonical queries with tool traces, and the `chat` vs `cold` session contrast. Only the optional
+  long-term-memory / wired-steps cell is still `# TODO`.
+- **`tools_used()` in the notebook defaults to `this_turn_only=True`.** It slices off the
+  carried-in messages, because walking the whole pile counts the *previous* turn's tools as the
+  current turn's. `lib/evaluation.py:262-265` has the same walk-all pattern and will over-report
+  on multi-turn sessions — handle that in P8, don't copy it blindly.
 - **The tool-use order lives in the system instructions, nowhere else.** `check_tool_calls`
   ([agents.py:133-137](project/starter/lib/agents.py#L133-L137)) only asks whether the model
   requested any tool. Weakening the instructions was tested and the agent skipped
   `evaluate_retrieval` entirely, with no error. Don't reword those instructions casually.
 - **Notebook execution counters are out of order** (1–11, then 14). Needs a restart-run-all before
   submission.
+- **Opening a notebook in VS Code rewrites its kernel metadata**, sometimes to `"version":
+  "3.11.-1"` and `display_name: "BuildingAgents (3.11.x)"`. Harmless functionally, but it shows up
+  as a spurious `git diff` on a file nobody edited. Check `git diff --stat` before assuming a
+  notebook changed.
 - **`game_web_search`'s docstring was fixed, deliberately.** The starter's was a copy of
   `retrieve_game`'s and claimed to search the vector DB. Don't "restore" it.
 - **The store exists on disk** at `project/starter/chromadb/`, collection `udaplay`, 15 documents,

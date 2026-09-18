@@ -34,7 +34,7 @@ that assumes every phase lands first time will fail its own gates on Day 2.
 | 2 | P3 `lib/` deep dive | 2.0 | You can explain how `@tool` becomes an OpenAI schema | `[x]` |
 | 3 | P4 The three tools | 2.5 | `retrieve_game`, `evaluate_retrieval`, `game_web_search` | `[x]` |
 | 3 | P5 First working agent | 1.5 | 3 smoke queries answered, incl. Tavily fallback | `[x]` |
-| 4 | P6 Stateful agent + state machine | 2.0 | Multi-turn session demonstrably remembers context | `[ ]` |
+| 4 | P6 Stateful agent + state machine | 2.0 | Multi-turn session demonstrably remembers context | `[x]` |
 | 4 | P7 Long-term memory persistence | 1.5 | Web-search findings survive a kernel restart | `[ ]` |
 | 5 | P8 Evaluation | 1.5 | AgentEvaluator: final-response, single-step, trajectory | `[ ]` |
 | 5 | P9 Stand-out features | 1.0 | Structured JSON + citations; extended dataset | `[ ]` |
@@ -391,7 +391,7 @@ the sequence means wiring it as named steps, which is the optional task in cell 
 
 ---
 
-### P6 — Stateful agent + state machine · Day 4 · 2.0h · Status: `[ ]`
+### P6 — Stateful agent + state machine · Day 4 · 2.0h · Status: `[x]`
 
 **Goal.** The agent maintains conversation state across multiple queries in a session. (Rubric:
 *"can handle multiple queries in a session, remembering previous context"*; workflow implemented as
@@ -419,9 +419,37 @@ session. That contrast is the proof — a single successful follow-up proves not
 2. What is re-sent to the API on turn 3 of a session?
 3. Why is `messages` in `AgentState` but `session_id` effectively isn't?
 
-**Gate.** Built `[ ]` ____ · Tested `[ ]` ____ · Explained `[ ]` ____
+**Gate.** Built `[x]` 2026-09-18 · Tested `[x]` 2026-09-18 · Explained `[x]` 2026-09-18
+
+**Results.** The proof is the contrast, not the successful follow-up. Same three words, two sessions:
+
+| Session | Question | Came in with | Answer |
+| --- | --- | --- | --- |
+| `chat` turn 1 | "When was Pokémon Gold and Silver released?" | 0 messages | 1999, Game Boy Color |
+| `chat` turn 2 | "Who published it?" | **7 messages** | "published by Nintendo" |
+| `cold` turn 1 | "Who published it?" | 0 messages | lists three unrelated games, asks which one |
+
+- **The evidence is the tool call, not the answer.** On turn 2 the model's `retrieve_game` query
+  came back with Pokémon — but the word "Pokémon" was never in that turn's question. It resolved
+  "it" from the carried-in messages *before* searching. Printing the 13-message pile with the
+  turn boundary marked is what made this visible.
+- The cold session degraded well rather than guessing, which is the `Do not guess` instruction
+  earning its place.
+- Cost: a four-word follow-up cost ~52% more than the full question before it (2,201 → 3,352),
+  because the whole pile is re-sent every turn.
+- N1 decision recorded in §3: left alone.
+
+**The one idea this phase turns on.** `state_machine.py:49-53` does two separate things —
+`updated = {**state}` copies everything forward, then the schema filter decides which *returned*
+keys are accepted. So the schema governs what a step may **change**, not what the state may
+**hold**. `messages` is in the schema because every step appends to it; `session_id` is not
+because nothing ever changes it.
 
 **Notes / blockers.**
+- Session isolation happens in `invoke` before the machine starts — a dictionary lookup by key at
+  `agents.py:158-162`. It has nothing to do with `AgentState`.
+- Nothing here survives a kernel restart: `ShortTermMemory.sessions` is a plain dict in process
+  memory. That gap is what P7 addresses.
 
 ---
 
@@ -606,6 +634,8 @@ retroactively.
 | 2026-09-17 | P5 | Tightened `retrieved_docs: list` to `list[str]` (B7) | `tooling.py:61` tests `get_origin(typ) is list`, which is `None` for a bare `list`, so the schema silently defaulted to `"string"`. The model was being asked to flatten three documents into one blob of text itself. Found by printing `evaluate_retrieval.dict()`; verified by diffing the schema before and after |
 | 2026-09-17 | P5 | Set `temperature=0.0`, overriding the `Agent` default of `0.7` | Tool selection is a choice the model makes, so randomness there makes the tool-use policy untestable. `agents.py:23` |
 | 2026-09-17 | P5 | Put the RAG → evaluate → fallback ordering in the system instructions, not in code | Nothing in `agents.py` knows one tool from another; `_tool_step` matches by name and the only branch asks whether any tool was requested. Prose is the only place the policy can live, and it is restated as a prohibition because the docstrings say the same thing from the tool side |
+| 2026-09-18 | P6 | **Left N1 alone** — did not add `session_id` to the `AgentState` schema | Session isolation happens in `invoke` before the machine starts (`agents.py:158-162`, a dictionary lookup by key) and does not involve the schema at all. Adding the key would only make each step's `session_id` return survive the filter instead of being dropped — and since every step returns the value it was handed, nothing observable changes. Seeding it in `initial_state` *is* load-bearing, because `agents.py:55` reads it with square brackets |
+| 2026-09-18 | P6 | Gave `tools_used()` a `this_turn_only=True` default, slicing off the carried-in messages | Walking the whole message list counts the previous turn's tools as the current turn's. Harmless in P5 (one session per query, nothing carried in) but wrong from the second turn onward. `lib/evaluation.py:262-265` has the same walk-all pattern, so P8 trajectory scoring will over-report tools on multi-turn sessions unless it is sliced the same way |
 
 ---
 

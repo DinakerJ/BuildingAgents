@@ -413,6 +413,47 @@ it by comparing the generated schema before and after."
 
 ---
 
+## B8 — `VectorStoreManager` embeds with `ada-002` while the corpus uses `3-small`
+
+**Found in:** P7 (2026-09-18) · **Severity:** low, silent — a quality defect, not a failure
+
+**Symptom.** None. Every search works. Memory searches are simply a little worse at finding the
+right fact than they should be, and there is no way to notice from the output.
+
+**Root cause.** [vector_db.py:161-165](project/starter/lib/vector_db.py#L161-L165) built the
+embedding function without naming a model:
+
+```python
+embedding_functions.OpenAIEmbeddingFunction(api_key=api_key)
+```
+
+Chroma's installed signature defaults `model_name` to `'text-embedding-ada-002'`. Notebook 01
+passes `text-embedding-3-small` explicitly, so the two collections in the same folder were being
+embedded by different models.
+
+**Why it stays hidden.** Both models return vectors of 1536 numbers, so nothing about the shape
+differs and nothing raises. Each collection is also internally consistent — a query to
+`long_term_memory` is embedded by the same function that stored its contents — so search *works*.
+Only the ranking quality suffers. This is the same trap already recorded in `PROGRESS.md` §3 for
+P1, reappearing inside `lib/`.
+
+**Impact.** Remembered facts rank slightly worse against a query than the same text would in the
+game corpus. Harmless at 1 fact, meaningful as memory grows, and invisible either way.
+
+**The fix.** Pass `model_name="text-embedding-3-small"` so both collections use one model.
+
+**Consequence worth knowing.** Changing the model orphans anything already stored — old rows hold
+ada-002 vectors and new rows hold 3-small ones, and distances between the two are meaningless.
+Chroma does not stop you. The `long_term_memory` collection was dropped and rebuilt (one test row
+at the time). **You cannot change an embedding model without re-embedding the collection.**
+
+**Panel answer.** "The library took Chroma's default embedding model while my corpus used
+text-embedding-3-small. Both return 1536 numbers so nothing failed — the memory searches were just
+quietly worse. I matched the models and rebuilt the collection, because mixing two embedding models
+in one collection makes the distances meaningless."
+
+---
+
 ## Fix ledger
 
 Mark each as you apply it. Copy the date into `PROGRESS.md` §3 with your rationale.
@@ -420,11 +461,12 @@ Mark each as you apply it. Copy the date into `PROGRESS.md` §3 with your ration
 | ID | File | Phase | Applied | Explained |
 | --- | --- | --- | --- | --- |
 | B1 | `lib/vector_db.py` | ~~P1~~ **P7** | [ ] | [ ] |
-| B2 | `lib/vector_db.py` | ~~P1~~ **P7** | [ ] | [ ] |
+| B2 | `lib/vector_db.py` | ~~P1~~ **P7** | [x] 2026-09-18 | [ ] |
 | B3 | `lib/vector_db.py` | P1 | ~~n/a~~ withdrawn | [ ] |
 | B4 | `lib/vector_db.py` | P2 | [ ] | [ ] |
-| B5 | `lib/memory.py` | P7 | [ ] | [ ] |
+| B5 | `lib/memory.py` | P7 | [x] 2026-09-18 | [ ] |
 | B6 | `lib/memory.py` | P7 | [ ] | [ ] |
 | N1 | `lib/agents.py` | P3/P6 | n/a | [ ] |
 | N2 | `lib/agents.py` | P6 | n/a | [ ] |
 | B7 | notebook 02 (trap in `lib/tooling.py`) | P5 | [x] 2026-09-17 | [ ] |
+| B8 | `lib/vector_db.py` | P7 | [x] 2026-09-18 | [ ] |

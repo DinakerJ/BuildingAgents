@@ -453,7 +453,7 @@ because nothing ever changes it.
 
 ---
 
-### P7 — Long-term memory persistence · Day 4 · 1.5h · Status: `[ ]`
+### P7 — Long-term memory persistence · Day 4 · 1.5h · Status: `[x] GATED 2026-09-22`
 
 **Goal.** Persist facts learned from web searches so the agent "learns" across sessions.
 (*Stand-out feature: Advanced Memory.*)
@@ -479,9 +479,12 @@ timing.
 2. What would you store: the raw search result, or a distilled fact? Defend the choice.
 3. How would stale memory hurt you here (e.g. "what is Rockstar working on right now")?
 
-**Gate.** Built `[ ]` ____ · Tested `[ ]` ____ · Explained `[ ]` ____
+**Gate.** Built `[x]` 2026-09-22 · Tested `[x]` 2026-09-22 · Explained `[x]` 2026-09-22
 
 **Notes / blockers.**
+- Fixed B2 (ephemeral client → PersistentClient), B5 (force-wipe self-bug → opt-in reset), B8 (wrong embedding model → text-embedding-3-small).
+- Write-back stores the agent's distilled answer (not raw Tavily results). TimestampFilter available but not wired — deferred.
+- Restart test confirmed: 1 fact survived kernel restart; game_web_search absent from second run.
 
 ---
 
@@ -635,6 +638,9 @@ retroactively.
 | 2026-09-17 | P5 | Set `temperature=0.0`, overriding the `Agent` default of `0.7` | Tool selection is a choice the model makes, so randomness there makes the tool-use policy untestable. `agents.py:23` |
 | 2026-09-17 | P5 | Put the RAG → evaluate → fallback ordering in the system instructions, not in code | Nothing in `agents.py` knows one tool from another; `_tool_step` matches by name and the only branch asks whether any tool was requested. Prose is the only place the policy can live, and it is restated as a prohibition because the docstrings say the same thing from the tool side |
 | 2026-09-18 | P6 | **Left N1 alone** — did not add `session_id` to the `AgentState` schema | Session isolation happens in `invoke` before the machine starts (`agents.py:158-162`, a dictionary lookup by key) and does not involve the schema at all. Adding the key would only make each step's `session_id` return survive the filter instead of being dropped — and since every step returns the value it was handed, nothing observable changes. Seeding it in `initial_state` *is* load-bearing, because `agents.py:55` reads it with square brackets |
+| 2026-09-18 | P7 | **Fixed B2** — `VectorStoreManager.__init__` now builds `chromadb.PersistentClient(path=persist_path)`, default `"chromadb"` | `chromadb.Client()` keeps everything in process memory, so "long-term" memory died with the kernel while looking like it worked all session. `LongTermMemory` has no way to reach disk on its own — `memory.py:225` requires a `VectorStoreManager`, so the store it gets is whatever that class built. Added `persist_path` as a defaulted argument so existing calls are unchanged. Verified by writing in one process and reading in a second |
+| 2026-09-18 | P7 | **Fixed B5** — `LongTermMemory.__init__` now uses `get_or_create_store`, with the destructive path behind `reset=False` | `create_store(force=True)` deletes the collection first, so constructing the object destroyed every stored memory before anything could read it. It failed silently *and* destroyed data, and because the wipe is in `__init__` the act of inspecting the store destroyed the evidence — no amount of print-debugging inside `search()` could have found it. Verified: fact stored, object rebuilt twice, count stayed 1; `reset=True` still returns 0, which is exactly what every construction used to do |
+| 2026-09-18 | P7 | **Fixed B8** — passed `model_name="text-embedding-3-small"` in `_create_embedding_function`, and dropped/rebuilt `long_term_memory` | The manager took Chroma's `ada-002` default while the corpus uses `3-small`, so the two collections in one folder were embedded by different models. Both return 1536 numbers and each collection is self-consistent, so nothing failed — memory searches were just quietly worse. Rebuild was required because mixing two embedding models in one collection makes distances meaningless |
 | 2026-09-18 | P6 | Gave `tools_used()` a `this_turn_only=True` default, slicing off the carried-in messages | Walking the whole message list counts the previous turn's tools as the current turn's. Harmless in P5 (one session per query, nothing carried in) but wrong from the second turn onward. `lib/evaluation.py:262-265` has the same walk-all pattern, so P8 trajectory scoring will over-report tools on multi-turn sessions unless it is sliced the same way |
 
 ---

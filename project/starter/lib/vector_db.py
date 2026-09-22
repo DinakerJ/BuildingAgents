@@ -154,13 +154,20 @@ class VectorStoreManager:
     - Store lifecycle management (create, get, delete)
     """
 
-    def __init__(self, openai_api_key: str):
-        self.chroma_client = chromadb.Client()
+    def __init__(self, openai_api_key: str, persist_path: str = "chromadb"):
+        # chromadb.Client() holds everything in process memory, so nothing survives a
+        # restart. The rubric needs a persistent store, so point at the same folder the
+        # game corpus already uses.
+        self.chroma_client = chromadb.PersistentClient(path=persist_path)
         self.embedding_function = self._create_embedding_function(openai_api_key)
 
     def _create_embedding_function(self, api_key: str) -> EmbeddingFunction:
+        # Chroma defaults to text-embedding-ada-002. The game corpus is embedded with
+        # text-embedding-3-small, so taking the default here would give remembered
+        # facts worse search quality — silently, since both return 1536 numbers.
         embeddings_fn = embedding_functions.OpenAIEmbeddingFunction(
-            api_key=api_key
+            api_key=api_key,
+            model_name="text-embedding-3-small"
         )
         return embeddings_fn
 

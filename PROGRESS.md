@@ -522,7 +522,7 @@ and observe the score drop — that's what proves the eval measures anything at 
 
 ---
 
-### P9 — Stand-out features · Day 5 · 1.0h · Status: `[ ]`
+### P9 — Stand-out features · Day 5 · 1.0h · Status: `[x] GATED 2026-09-23`
 
 **Goal.** Structured output alongside natural language, plus a personalised dataset.
 
@@ -542,7 +542,12 @@ right answer from the corpus, not the web.
 1. Why does structured output make the agent *composable*?
 2. How is your `confidence` derived, and is it honest?
 
-**Gate.** Built `[ ]` ____ · Tested `[ ]` ____ · Explained `[ ]` ____
+**Gate.** Built `[x]` 2026-09-23 · Tested `[x]` 2026-09-23 · Explained `[x]` 2026-09-23
+
+**Notes / blockers.**
+- `GameAnswer` model: answer, sources, confidence, used_web_search. Second LLM call extracts fields from prose — keeps prose intact for humans, JSON available for downstream systems.
+- Extended dataset: games/016 (Zelda OoT), 017 (RDR2), 018 (Halo CE). Ingest targets only new files with upsert; collection now 18 documents.
+- Halo query answered with used_web_search=false — proves new documents embedded and retrieved from corpus.
 
 ---
 

@@ -488,7 +488,7 @@ timing.
 
 ---
 
-### P8 — Evaluation · Day 5 · 1.5h · Status: `[ ]`
+### P8 — Evaluation · Day 5 · 1.5h · Status: `[x] GATED 2026-09-22`
 
 **Goal.** Measure prompt and tool-calling quality with `lib/evaluation.py::AgentEvaluator`.
 (*Stand-out feature: Evals.*)
@@ -512,9 +512,13 @@ and observe the score drop — that's what proves the eval measures anything at 
 2. What is your judge's own failure mode?
 3. What did trajectory eval tell you about cost that the final-response score hid?
 
-**Gate.** Built `[ ]` ____ · Tested `[ ]` ____ · Explained `[ ]` ____
+**Gate.** Built `[x]` 2026-09-22 · Tested `[x]` 2026-09-22 · Explained `[x]` 2026-09-22
 
 **Notes / blockers.**
+- Three TestCases covering corpus hit, reasoning, and fallback path.
+- All three traj scores 1.0 on baseline run.
+- Degradation test: vague docstring did not change tool path (instructions named tool explicitly); traj score stayed 1.0 due to `any()` check in evaluate_trajectory — evaluator's own blind spot identified.
+- `evaluate_single_step` limitation noted: checks last AI message only, misses multi-step ordering.
 
 ---
 
